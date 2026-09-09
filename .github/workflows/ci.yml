@@ -2,23 +2,58 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11.8.0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: pnpm
+
       - run: pnpm install --frozen-lockfile
+
       - name: Build Solid 2 application
         run: pnpm build:web
+
+      - name: Verify Go formatting
+        run: |
+          set -euo pipefail
+          UNFORMATTED="$(gofmt -l .)"
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Go files require gofmt:"
+            printf '%s\n' "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Test Go application
+        run: go test ./...
 
       - name: Validate SQLite/Turso growth query contract
         run: |
@@ -31,5 +66,5 @@ jobs:
           sqlite3 "$db" "PRAGMA integrity_check;"
           sqlite3 "$db" < scripts/validate-growth.sql
 
-      - name: Build and test production Go image
+      - name: Build production image
         run: docker build -t plantingtulips:ci .
