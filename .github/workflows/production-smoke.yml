@@ -1,0 +1,29 @@
+name: Production smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '11 9 * * *'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run production smoke
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          REQUIRE_CATALOG: '1'
+          REQUIRE_GROWTH: '1'
+        run: |
+          if [ -z "$SITE_URL" ]; then
+            echo "SITE_URL is not configured; skipping production smoke."
+            exit 0
+          fi
+          pnpm smoke:production

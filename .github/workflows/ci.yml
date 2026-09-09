@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Build Solid 2 application
+        run: pnpm build:web
+
+      - name: Validate SQLite/Turso growth query contract
+        run: |
+          set -euo pipefail
+          db="$(mktemp)"
+          for migration in migrations/*.sql; do
+            echo "Applying ${migration}"
+            sqlite3 "$db" < "$migration"
+          done
+          sqlite3 "$db" "PRAGMA integrity_check;"
+          sqlite3 "$db" < scripts/validate-growth.sql
+
+      - name: Build and test production Go image
+        run: docker build -t plantingtulips:ci .

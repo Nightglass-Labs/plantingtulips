@@ -1,0 +1,32 @@
+{
+  "name": "plantingtulips",
+  "version": "0.2.0-rc.1",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "scripts": {
+    "dev": "vite",
+    "dev:web": "vite",
+    "dev:server": "go run .",
+    "build:web": "pnpm typecheck && vite build",
+    "build": "pnpm build:web && go build -o bin/plantingtulips .",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm typecheck",
+    "test:go": "go test ./...",
+    "smoke:production": "node scripts/smoke-production.mjs"
+  },
+  "dependencies": {
+    "@solidjs/router": "next",
+    "@solidjs/web": "next",
+    "@stylexjs/stylex": "0.19.0",
+    "solid-js": "next"
+  },
+  "devDependencies": {
+    "@solidjs/vite-plugin": "next",
+    "@stylexjs/unplugin": "0.19.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2"
+  }
+}
