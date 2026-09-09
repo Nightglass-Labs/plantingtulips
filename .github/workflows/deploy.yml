@@ -1,0 +1,50 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify production configuration
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FLY_API_TOKEN" ] || [ -z "$SITE_URL" ]; then
+            echo "FLY_API_TOKEN and SITE_URL must be configured."
+            exit 1
+          fi
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --app plantingtulips
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify deployed origin
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: node scripts/smoke-production.mjs
