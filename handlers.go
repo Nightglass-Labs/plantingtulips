@@ -229,10 +229,14 @@ func (a *app) relayReport(ctx context.Context, report Report, autoBlocked bool) 
 		"details": report.Details, "receivedAt": time.Now().UTC().Format(time.RFC3339), "autoBlocked": autoBlocked,
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.reportWebhookURL, bytes.NewReader(payload))
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := a.client.Do(req)
-	if err != nil { return false }
+	if err != nil {
+		return false
+	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
@@ -303,9 +307,13 @@ func (a *app) handleAdminProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleAdminMaintenance(w http.ResponseWriter, r *http.Request) {
-	var input struct { RetentionDays int `json:"retentionDays"` }
+	var input struct {
+		RetentionDays int `json:"retentionDays"`
+	}
 	_ = decodeJSONBody(w, r, 4<<10, &input)
-	if input.RetentionDays == 0 { input.RetentionDays = 90 }
+	if input.RetentionDays == 0 {
+		input.RetentionDays = 90
+	}
 	analytics, err := a.pruneAnalytics(r.Context(), input.RetentionDays)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "maintenance failed")
@@ -320,7 +328,9 @@ func (a *app) handleAdminIngest(w http.ResponseWriter, r *http.Request) {
 		SyncRemoved bool `json:"syncRemoved"`
 	}
 	_ = decodeJSONBody(w, r, 4<<10, &input)
-	if input.Pages == 0 { input.Pages = 1 }
+	if input.Pages == 0 {
+		input.Pages = 1
+	}
 	input.Pages = max(1, min(5, input.Pages))
 	result, err := a.runIngestion(r.Context(), input.Pages, input.SyncRemoved)
 	if err != nil {
@@ -338,15 +348,21 @@ type ingestProviderResult struct {
 
 func (a *app) runIngestion(ctx context.Context, pages int, syncRemoved bool) (map[string]any, error) {
 	categories, err := a.listCategories(ctx)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	results := map[ProviderName]*ingestProviderResult{
 		ProviderEporner: {Errors: []string{}},
 		ProviderXvideos: {Errors: []string{}},
 	}
 	for _, provider := range []ProviderName{ProviderEporner, ProviderXvideos} {
 		enabled, err := a.providerEnabled(ctx, provider)
-		if err != nil { return nil, err }
-		if !enabled { continue }
+		if err != nil {
+			return nil, err
+		}
+		if !enabled {
+			continue
+		}
 		for _, category := range categories {
 			for page := 1; page <= pages; page++ {
 				var search providerSearchResult
@@ -387,7 +403,9 @@ func (a *app) runIngestion(ctx context.Context, pages int, syncRemoved bool) (ma
 			}
 		}
 		message := ""
-		if len(results[provider].Errors) > 0 { message = strings.Join(results[provider].Errors, "; ") }
+		if len(results[provider].Errors) > 0 {
+			message = strings.Join(results[provider].Errors, "; ")
+		}
 		_ = a.markSync(ctx, provider, results[provider].Imported, removedSynced, message)
 	}
 	return map[string]any{"ok": true, "pages": pages, "providers": results}, nil
@@ -401,11 +419,15 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, maxBytes int64, targ
 
 func parseBoundedInt(value string, fallback, low, high int) int {
 	n, err := strconv.Atoi(value)
-	if err != nil { return fallback }
+	if err != nil {
+		return fallback
+	}
 	return max(low, min(high, n))
 }
 
-func validProvider(provider ProviderName) bool { return provider == ProviderEporner || provider == ProviderXvideos }
+func validProvider(provider ProviderName) bool {
+	return provider == ProviderEporner || provider == ProviderXvideos
+}
 
 func validEmail(value string) bool {
 	at := strings.LastIndex(value, "@")
@@ -414,11 +436,15 @@ func validEmail(value string) bool {
 
 func randomID() (string, error) {
 	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil { return "", err }
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
 	return hex.EncodeToString(buf), nil
 }
 
 func contextError(ctx context.Context, fallback string) error {
-	if err := ctx.Err(); err != nil { return err }
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return fmt.Errorf("%s", fallback)
 }

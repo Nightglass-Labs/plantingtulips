@@ -42,8 +42,12 @@ func (a *app) resolveSEO(ctx context.Context, requestURL *url.URL) seoDocument {
 	private := pathname == "/admin" || strings.HasPrefix(pathname, "/admin/") || pathname == "/library" || pathname == "/report"
 	if private {
 		title := "Utility · PlantingTulips"
-		if strings.HasPrefix(pathname, "/admin") { title = "Admin · PlantingTulips" }
-		if pathname == "/library" { title = "Your library · PlantingTulips" }
+		if strings.HasPrefix(pathname, "/admin") {
+			title = "Admin · PlantingTulips"
+		}
+		if pathname == "/library" {
+			title = "Your library · PlantingTulips"
+		}
 		return seoDocument{Title: title, Description: "PlantingTulips private or utility surface.", Canonical: canonical, Robots: "noindex,nofollow,noarchive", OGType: "website"}
 	}
 
@@ -70,9 +74,9 @@ func (a *app) resolveSEO(ctx context.Context, requestURL *url.URL) seoDocument {
 			provider, id := cleanSegment(parts[1]), cleanSegment(parts[2])
 			if video, found, err := a.getCatalogVideo(ctx, provider, id); err == nil && found {
 				return seoDocument{
-					Title: video.Title + " · PlantingTulips",
+					Title:       video.Title + " · PlantingTulips",
 					Description: "Browse this video via the approved " + string(video.Provider) + " embed and discover related catalog results.",
-					Canonical: canonical, Robots: "index,follow,max-image-preview:large", Image: video.ThumbnailURL, OGType: "video.other", Video: &video,
+					Canonical:   canonical, Robots: "index,follow,max-image-preview:large", Image: video.ThumbnailURL, OGType: "video.other", Video: &video,
 				}
 			}
 		}
@@ -89,7 +93,9 @@ func (a *app) resolveSEO(ctx context.Context, requestURL *url.URL) seoDocument {
 		return seoDocument{Title: "Not found · PlantingTulips", Description: "This PlantingTulips page does not exist.", Canonical: canonical, Robots: "noindex,follow", OGType: "website"}
 	}
 	query := truncate(strings.ReplaceAll(strings.ReplaceAll(requestURL.Query().Get("q"), "<", ""), ">", ""), 120)
-	if strings.EqualFold(query, "blowjob") { query = "" }
+	if strings.EqualFold(query, "blowjob") {
+		query = ""
+	}
 	if query != "" {
 		canonical += "?q=" + url.QueryEscape(query)
 		return seoDocument{Title: query + " videos · PlantingTulips", Description: "A focused video discovery catalog built from approved provider APIs, feeds, and embeds.", Canonical: canonical, Robots: "index,follow,max-image-preview:large", OGType: "website"}
@@ -132,7 +138,9 @@ func (a *app) robots(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /library\nDisallow: /report\nSitemap: %s/sitemap.xml\n", a.baseURL)
 }
 
-type sitemapURL struct { Loc string `xml:"loc"` }
+type sitemapURL struct {
+	Loc string `xml:"loc"`
+}
 type sitemapSet struct {
 	XMLName xml.Name     `xml:"urlset"`
 	Xmlns   string       `xml:"xmlns,attr"`
@@ -143,7 +151,9 @@ func (a *app) sitemap(w http.ResponseWriter, r *http.Request) {
 	locations := []string{a.baseURL + "/", a.baseURL + "/categories"}
 	categories, err := a.listCategories(r.Context())
 	if err == nil {
-		for _, category := range categories { locations = append(locations, a.baseURL+"/category/"+url.PathEscape(category.Slug)) }
+		for _, category := range categories {
+			locations = append(locations, a.baseURL+"/category/"+url.PathEscape(category.Slug))
+		}
 	}
 	if rows, err := a.db.QueryContext(r.Context(), `
 SELECT t.slug
@@ -154,7 +164,12 @@ WHERE v.active = 1
 GROUP BY t.id, t.slug
 ORDER BY COUNT(*) DESC
 LIMIT 250`); err == nil {
-		for rows.Next() { var slug string; if rows.Scan(&slug) == nil { locations = append(locations, a.baseURL+"/tag/"+url.PathEscape(slug)) } }
+		for rows.Next() {
+			var slug string
+			if rows.Scan(&slug) == nil {
+				locations = append(locations, a.baseURL+"/tag/"+url.PathEscape(slug))
+			}
+		}
 		_ = rows.Close()
 	}
 	if rows, err := a.db.QueryContext(r.Context(), `
@@ -162,13 +177,23 @@ SELECT provider, provider_id FROM videos v
 WHERE active = 1
 AND NOT EXISTS (SELECT 1 FROM blocked_content b WHERE b.provider=v.provider AND b.provider_id=v.provider_id)
 ORDER BY imported_at DESC LIMIT 1000`); err == nil {
-		for rows.Next() { var provider, id string; if rows.Scan(&provider, &id) == nil { locations = append(locations, a.baseURL+"/watch/"+url.PathEscape(provider)+"/"+url.PathEscape(id)) } }
+		for rows.Next() {
+			var provider, id string
+			if rows.Scan(&provider, &id) == nil {
+				locations = append(locations, a.baseURL+"/watch/"+url.PathEscape(provider)+"/"+url.PathEscape(id))
+			}
+		}
 		_ = rows.Close()
 	}
 	set := sitemapSet{Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9", URLs: make([]sitemapURL, 0, len(locations))}
-	for _, location := range locations { set.URLs = append(set.URLs, sitemapURL{Loc: location}) }
+	for _, location := range locations {
+		set.URLs = append(set.URLs, sitemapURL{Loc: location})
+	}
 	body, err := xml.MarshalIndent(set, "", "  ")
-	if err != nil { http.Error(w, "sitemap error", http.StatusInternalServerError); return }
+	if err != nil {
+		http.Error(w, "sitemap error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	_, _ = w.Write([]byte(xml.Header))
 	_, _ = w.Write(body)
@@ -176,30 +201,41 @@ ORDER BY imported_at DESC LIMIT 1000`); err == nil {
 
 func cleanSegment(value string) string {
 	decoded, err := url.PathUnescape(value)
-	if err == nil { value = decoded }
+	if err == nil {
+		value = decoded
+	}
 	return truncate(value, 160)
 }
 
 func titleCase(value string) string {
 	words := strings.Fields(value)
 	for i, word := range words {
-		if word != "" { words[i] = strings.ToUpper(word[:1]) + word[1:] }
+		if word != "" {
+			words[i] = strings.ToUpper(word[:1]) + word[1:]
+		}
 	}
 	return strings.Join(words, " ")
 }
 
 func legalTitle(path string) string {
 	switch path {
-	case "/terms": return "Terms"
-	case "/privacy": return "Privacy"
-	case "/dmca": return "DMCA"
-	case "/2257": return "2257"
-	default: return ""
+	case "/terms":
+		return "Terms"
+	case "/privacy":
+		return "Privacy"
+	case "/dmca":
+		return "DMCA"
+	case "/2257":
+		return "2257"
+	default:
+		return ""
 	}
 }
 
 func nullableScanString(value sql.NullString) *string {
-	if !value.Valid { return nil }
+	if !value.Valid {
+		return nil
+	}
 	copy := value.String
 	return &copy
 }

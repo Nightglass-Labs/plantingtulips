@@ -18,8 +18,8 @@ import (
 var webFS embed.FS
 
 type app struct {
-	db                  *sql.DB
-	adminToken          string
+	db                   *sql.DB
+	adminToken           string
 	ingestSecret         string
 	baseURL              string
 	xvideosEndpoint      string
@@ -76,8 +76,8 @@ func newApp(db *sql.DB) (*app, error) {
 		adminToken = ingestSecret
 	}
 	return &app{
-		db:                  db,
-		adminToken:          adminToken,
+		db:                   db,
+		adminToken:           adminToken,
 		ingestSecret:         ingestSecret,
 		baseURL:              strings.TrimRight(env("BASE_URL", "https://plantingtulips.com"), "/"),
 		xvideosEndpoint:      strings.TrimSpace(os.Getenv("XVIDEOS_PARTNER_JSON_ENDPOINT")),
