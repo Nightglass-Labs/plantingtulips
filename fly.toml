@@ -6,7 +6,7 @@ primary_region = "iad"
 
 [env]
   ADDR = ":8080"
-  BASE_URL = "https://plantingtulips.com"
+  BASE_URL = "https://plantingtulips.fly.dev"
 
 [http_service]
   internal_port = 8080
