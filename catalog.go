@@ -562,19 +562,27 @@ func mustJSON(value any) string {
 }
 
 func nullInt(value *int64) any {
-	if value == nil { return nil }
+	if value == nil {
+		return nil
+	}
 	return *value
 }
 func nullFloat(value *float64) any {
-	if value == nil { return nil }
+	if value == nil {
+		return nil
+	}
 	return *value
 }
 func nullableString(value string) any {
-	if strings.TrimSpace(value) == "" { return nil }
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
 	return value
 }
 func truncate(value string, maxLen int) string {
 	value = strings.TrimSpace(value)
-	if len(value) > maxLen { return value[:maxLen] }
+	if len(value) > maxLen {
+		return value[:maxLen]
+	}
 	return value
 }

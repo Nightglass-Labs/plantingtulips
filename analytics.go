@@ -201,8 +201,8 @@ func (a *app) pruneAnalytics(ctx context.Context, retentionDays int) (map[string
 		return nil, err
 	}
 	return map[string]any{
-		"retentionDays": retentionDays,
-		"deletedEvents": max(int64(0), before-after),
+		"retentionDays":   retentionDays,
+		"deletedEvents":   max(int64(0), before-after),
 		"remainingEvents": after,
 	}, nil
 }
@@ -213,14 +213,30 @@ func (a *app) adminDashboard(ctx context.Context) (adminDashboardResponse, error
 		return out, err
 	}
 	var err error
-	if out.Reports, err = queryNamedCounts(ctx, a.db, `SELECT status, COUNT(*) FROM reports GROUP BY status`, "status"); err != nil { return out, err }
-	if out.EventsToday, err = queryNamedCounts(ctx, a.db, `SELECT event_name, COUNT(*) FROM analytics_events WHERE created_at >= DATETIME('now', '-1 day') GROUP BY event_name ORDER BY COUNT(*) DESC`, "event"); err != nil { return out, err }
-	if out.TopSearches, err = queryNamedCounts(ctx, a.db, `SELECT query, COUNT(*) FROM analytics_events WHERE event_name='search' AND query IS NOT NULL AND created_at >= DATETIME('now', '-30 day') GROUP BY query ORDER BY COUNT(*) DESC LIMIT 20`, "query"); err != nil { return out, err }
-	if out.TopCategories, err = queryNamedCounts(ctx, a.db, `SELECT category, COUNT(*) FROM analytics_events WHERE event_name='category_view' AND category IS NOT NULL AND created_at >= DATETIME('now', '-30 day') GROUP BY category ORDER BY COUNT(*) DESC LIMIT 20`, "category"); err != nil { return out, err }
-	if out.Providers, err = a.queryAdminProviders(ctx); err != nil { return out, err }
-	if out.Sync, err = a.queryAdminSync(ctx); err != nil { return out, err }
-	if out.TopVideos, err = a.queryTopVideos(ctx); err != nil { return out, err }
-	if out.Ads, err = a.queryAds(ctx); err != nil { return out, err }
+	if out.Reports, err = queryNamedCounts(ctx, a.db, `SELECT status, COUNT(*) FROM reports GROUP BY status`, "status"); err != nil {
+		return out, err
+	}
+	if out.EventsToday, err = queryNamedCounts(ctx, a.db, `SELECT event_name, COUNT(*) FROM analytics_events WHERE created_at >= DATETIME('now', '-1 day') GROUP BY event_name ORDER BY COUNT(*) DESC`, "event"); err != nil {
+		return out, err
+	}
+	if out.TopSearches, err = queryNamedCounts(ctx, a.db, `SELECT query, COUNT(*) FROM analytics_events WHERE event_name='search' AND query IS NOT NULL AND created_at >= DATETIME('now', '-30 day') GROUP BY query ORDER BY COUNT(*) DESC LIMIT 20`, "query"); err != nil {
+		return out, err
+	}
+	if out.TopCategories, err = queryNamedCounts(ctx, a.db, `SELECT category, COUNT(*) FROM analytics_events WHERE event_name='category_view' AND category IS NOT NULL AND created_at >= DATETIME('now', '-30 day') GROUP BY category ORDER BY COUNT(*) DESC LIMIT 20`, "category"); err != nil {
+		return out, err
+	}
+	if out.Providers, err = a.queryAdminProviders(ctx); err != nil {
+		return out, err
+	}
+	if out.Sync, err = a.queryAdminSync(ctx); err != nil {
+		return out, err
+	}
+	if out.TopVideos, err = a.queryTopVideos(ctx); err != nil {
+		return out, err
+	}
+	if out.Ads, err = a.queryAds(ctx); err != nil {
+		return out, err
+	}
 
 	if err := a.db.QueryRowContext(ctx, `
 SELECT
@@ -237,31 +253,49 @@ WHERE created_at >= DATETIME('now', '-7 day')`).Scan(
 		&out.Funnel7d.Sessions, &out.Funnel7d.Searches, &out.Funnel7d.FeedImpressions,
 		&out.Funnel7d.RelatedImpressions, &out.Funnel7d.VideoOpens, &out.Funnel7d.RelatedClicks,
 		&out.Funnel7d.SourceClicks, &out.Funnel7d.Favorites,
-	); err != nil { return out, err }
+	); err != nil {
+		return out, err
+	}
 
 	var oldest, newest sql.NullString
-	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM analytics_events`).Scan(&out.AnalyticsRetention.RawEvents, &oldest, &newest); err != nil { return out, err }
+	if err := a.db.QueryRowContext(ctx, `SELECT COUNT(*), MIN(created_at), MAX(created_at) FROM analytics_events`).Scan(&out.AnalyticsRetention.RawEvents, &oldest, &newest); err != nil {
+		return out, err
+	}
 	out.AnalyticsRetention.ConfiguredDays = 90
-	if oldest.Valid { value := oldest.String; out.AnalyticsRetention.OldestEvent = &value }
-	if newest.Valid { value := newest.String; out.AnalyticsRetention.NewestEvent = &value }
+	if oldest.Valid {
+		value := oldest.String
+		out.AnalyticsRetention.OldestEvent = &value
+	}
+	if newest.Valid {
+		value := newest.String
+		out.AnalyticsRetention.NewestEvent = &value
+	}
 	return out, nil
 }
 
 func queryNamedCounts(ctx context.Context, db *sql.DB, query, field string) ([]namedCount, error) {
 	rows, err := db.QueryContext(ctx, query)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	out := []namedCount{}
 	for rows.Next() {
 		var value string
 		var count int64
-		if err := rows.Scan(&value, &count); err != nil { return nil, err }
+		if err := rows.Scan(&value, &count); err != nil {
+			return nil, err
+		}
 		item := namedCount{Count: count}
 		switch field {
-		case "status": item.Status = value
-		case "event": item.Event = value
-		case "query": item.Query = value
-		case "category": item.Category = value
+		case "status":
+			item.Status = value
+		case "event":
+			item.Event = value
+		case "query":
+			item.Query = value
+		case "category":
+			item.Category = value
 		}
 		out = append(out, item)
 	}
@@ -270,16 +304,29 @@ func queryNamedCounts(ctx context.Context, db *sql.DB, query, field string) ([]n
 
 func (a *app) queryAdminProviders(ctx context.Context) ([]providerAdminRow, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT name, enabled, last_ok_at, last_error_at, last_error FROM providers ORDER BY name`)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	out := []providerAdminRow{}
 	for rows.Next() {
 		var item providerAdminRow
 		var okAt, errorAt, lastError sql.NullString
-		if err := rows.Scan(&item.Name, &item.Enabled, &okAt, &errorAt, &lastError); err != nil { return nil, err }
-		if okAt.Valid { v := okAt.String; item.LastOKAt = &v }
-		if errorAt.Valid { v := errorAt.String; item.LastErrorAt = &v }
-		if lastError.Valid { v := lastError.String; item.LastError = &v }
+		if err := rows.Scan(&item.Name, &item.Enabled, &okAt, &errorAt, &lastError); err != nil {
+			return nil, err
+		}
+		if okAt.Valid {
+			v := okAt.String
+			item.LastOKAt = &v
+		}
+		if errorAt.Valid {
+			v := errorAt.String
+			item.LastErrorAt = &v
+		}
+		if lastError.Valid {
+			v := lastError.String
+			item.LastError = &v
+		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
@@ -287,16 +334,29 @@ func (a *app) queryAdminProviders(ctx context.Context) ([]providerAdminRow, erro
 
 func (a *app) queryAdminSync(ctx context.Context) ([]syncAdminRow, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT provider, last_sync_at, last_removed_sync_at, last_error, imported_count FROM provider_sync_state ORDER BY provider`)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	out := []syncAdminRow{}
 	for rows.Next() {
 		var item syncAdminRow
 		var syncAt, removedAt, lastError sql.NullString
-		if err := rows.Scan(&item.Provider, &syncAt, &removedAt, &lastError, &item.ImportedCount); err != nil { return nil, err }
-		if syncAt.Valid { v := syncAt.String; item.LastSyncAt = &v }
-		if removedAt.Valid { v := removedAt.String; item.LastRemovedSyncAt = &v }
-		if lastError.Valid { v := lastError.String; item.LastError = &v }
+		if err := rows.Scan(&item.Provider, &syncAt, &removedAt, &lastError, &item.ImportedCount); err != nil {
+			return nil, err
+		}
+		if syncAt.Valid {
+			v := syncAt.String
+			item.LastSyncAt = &v
+		}
+		if removedAt.Valid {
+			v := removedAt.String
+			item.LastRemovedSyncAt = &v
+		}
+		if lastError.Valid {
+			v := lastError.String
+			item.LastError = &v
+		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
@@ -304,12 +364,16 @@ func (a *app) queryAdminSync(ctx context.Context) ([]syncAdminRow, error) {
 
 func (a *app) queryTopVideos(ctx context.Context) ([]topVideoMetric, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT provider, provider_id, opens, related_clicks, source_clicks, favorites, hides FROM video_metrics ORDER BY (opens + related_clicks * 2 + source_clicks) DESC LIMIT 20`)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	out := []topVideoMetric{}
 	for rows.Next() {
 		var item topVideoMetric
-		if err := rows.Scan(&item.Provider, &item.VideoID, &item.Opens, &item.RelatedClicks, &item.SourceClicks, &item.Favorites, &item.Hides); err != nil { return nil, err }
+		if err := rows.Scan(&item.Provider, &item.VideoID, &item.Opens, &item.RelatedClicks, &item.SourceClicks, &item.Favorites, &item.Hides); err != nil {
+			return nil, err
+		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
@@ -317,12 +381,16 @@ func (a *app) queryTopVideos(ctx context.Context) ([]topVideoMetric, error) {
 
 func (a *app) queryAds(ctx context.Context) ([]adMetric, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT day, slot, provider, impressions, clicks, revenue FROM monetization_metrics WHERE day >= DATE('now', '-30 day') ORDER BY day DESC, impressions DESC LIMIT 100`)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	out := []adMetric{}
 	for rows.Next() {
 		var item adMetric
-		if err := rows.Scan(&item.Day, &item.Slot, &item.Provider, &item.Impressions, &item.Clicks, &item.Revenue); err != nil { return nil, err }
+		if err := rows.Scan(&item.Day, &item.Slot, &item.Provider, &item.Impressions, &item.Clicks, &item.Revenue); err != nil {
+			return nil, err
+		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
@@ -330,13 +398,20 @@ func (a *app) queryAds(ctx context.Context) ([]adMetric, error) {
 
 func metricColumn(eventName string) string {
 	switch eventName {
-	case "video_impression": return "impressions"
-	case "video_open": return "opens"
-	case "related_click": return "related_clicks"
-	case "source_click": return "source_clicks"
-	case "favorite": return "favorites"
-	case "hide": return "hides"
-	default: return ""
+	case "video_impression":
+		return "impressions"
+	case "video_open":
+		return "opens"
+	case "related_click":
+		return "related_clicks"
+	case "source_click":
+		return "source_clicks"
+	case "favorite":
+		return "favorites"
+	case "hide":
+		return "hides"
+	default:
+		return ""
 	}
 }
 
@@ -344,9 +419,13 @@ func sanitizeMetadata(input map[string]any) map[string]any {
 	out := map[string]any{}
 	count := 0
 	for key, value := range input {
-		if count >= 12 { break }
+		if count >= 12 {
+			break
+		}
 		key = truncate(key, 48)
-		if key == "" { continue }
+		if key == "" {
+			continue
+		}
 		switch v := value.(type) {
 		case nil, bool, float64, float32, int, int64, json.Number:
 			out[key] = v
