@@ -1,4 +1,4 @@
-module github.com/Nightglass/plantingtulips
+module github.com/Nightglass-Labs/plantingtulips
 
 go 1.25
 

@@ -1,0 +1,142 @@
+name: Nightglass Bot PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      patch_b64:
+        description: Base64 encoded unified diff
+        required: true
+        type: string
+      commit_message:
+        description: Commit message
+        required: true
+        type: string
+      pr_title:
+        description: Pull request title
+        required: true
+        type: string
+      pr_body:
+        description: Pull request description
+        required: false
+        default: Automated change by Nightglass Bot.
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightglass-bot
+  cancel-in-progress: false
+
+jobs:
+  change:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Create Nightglass Bot token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.NIGHTGLASS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.NIGHTGLASS_APP_PRIVATE_KEY }}
+          owner: Nightglass-Labs
+          repositories: plantingtulips
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Configure Nightglass Bot
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+
+          BOT_ID="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email \
+            "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      - name: Apply change
+        env:
+          PATCH_B64: ${{ inputs.patch_b64 }}
+        run: |
+          set -euo pipefail
+
+          BRANCH="bot/${GITHUB_RUN_ID}"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+          git switch -c "$BRANCH"
+
+          printf '%s' "$PATCH_B64" | base64 --decode > /tmp/change.patch
+
+          git apply --check /tmp/change.patch
+          git apply /tmp/change.patch
+
+          if git diff --quiet; then
+            echo "Patch produced no changes"
+            exit 1
+          fi
+
+      - name: Validate
+        run: |
+          set -euo pipefail
+
+          gofmt -w .
+          go test ./...
+
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm build:web
+
+      - name: Commit and push
+        env:
+          COMMIT_MESSAGE: ${{ inputs.commit_message }}
+        run: |
+          set -euo pipefail
+
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 1
+          fi
+
+          git commit -m "$COMMIT_MESSAGE"
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_TITLE: ${{ inputs.pr_title }}
+          PR_BODY: ${{ inputs.pr_body }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY"
