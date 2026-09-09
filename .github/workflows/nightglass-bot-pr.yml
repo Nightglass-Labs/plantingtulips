@@ -106,12 +106,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          gofmt -w .
-          go test ./...
-
           pnpm install --frozen-lockfile
           pnpm check
           pnpm build:web
+
+          gofmt -w .
+          go test ./...
+          docker build -t plantingtulips:bot-check .
 
       - name: Commit and push
         env:
