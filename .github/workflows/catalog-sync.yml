@@ -5,19 +5,37 @@ on:
   schedule:
     - cron: '17 7 * * *'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-sync
+  cancel-in-progress: false
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
+      - name: Verify production configuration
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SITE_URL" ] || [ -z "$INGEST_SECRET" ] || [ -z "$ADMIN_TOKEN" ]; then
+            echo "SITE_URL, INGEST_SECRET, and ADMIN_TOKEN must be configured."
+            exit 1
+          fi
+
       - name: Sync approved provider catalogs
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
         run: |
-          if [ -z "$SITE_URL" ] || [ -z "$INGEST_SECRET" ]; then
-            echo "SITE_URL/INGEST_SECRET not configured; skipping scheduled sync."
-            exit 0
-          fi
+          set -euo pipefail
           curl --fail-with-body --retry 2 --max-time 120 \
             -X POST "$SITE_URL/api/v1/admin/ingest" \
             -H "authorization: Bearer $INGEST_SECRET" \
@@ -27,13 +45,24 @@ jobs:
       - name: Prune raw analytics retention window
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
-          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          if [ -z "$SITE_URL" ] || [ -z "$INGEST_SECRET" ]; then
-            exit 0
-          fi
+          set -euo pipefail
           curl --fail-with-body --retry 2 --max-time 30 \
             -X POST "$SITE_URL/api/v1/admin/maintenance" \
-            -H "authorization: Bearer $INGEST_SECRET" \
+            -H "authorization: Bearer $ADMIN_TOKEN" \
             -H "content-type: application/json" \
             --data '{"retentionDays":90}'
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify catalog after synchronization
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          REQUIRE_CATALOG: '1'
+          REQUIRE_GROWTH: '1'
+        run: node scripts/smoke-production.mjs
