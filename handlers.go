@@ -379,13 +379,12 @@ func (a *app) runIngestion(ctx context.Context, pages int, syncRemoved bool) (ma
 					break
 				}
 				_ = a.recordProviderHealth(ctx, provider, true, "")
-				for _, video := range search.Videos {
-					if err := a.upsertVideo(ctx, video, category.Slug); err != nil {
-						results[provider].Errors = append(results[provider].Errors, "upsert: "+err.Error())
-						continue
-					}
-					results[provider].Imported++
+				imported, upsertErr := a.upsertCatalogVideos(ctx, search.Videos, category.Slug)
+				if upsertErr != nil {
+					results[provider].Errors = append(results[provider].Errors, "upsert: "+upsertErr.Error())
+					continue
 				}
+				results[provider].Imported += imported
 			}
 		}
 		removedSynced := false
