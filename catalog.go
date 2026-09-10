@@ -201,6 +201,69 @@ SELECT ?, id FROM tags WHERE slug = ?`, videoID, tag.Slug); err != nil {
 	return tx.Commit()
 }
 
+func (a *app) upsertCatalogVideos(ctx context.Context, videos []VideoSummary, categorySlug string) (int, error) {
+	if len(videos) == 0 {
+		return 0, nil
+	}
+
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	for _, video := range videos {
+		tags := normalizeTags(video.Tags)
+		durationSeconds := parseDuration(video.Duration)
+		rankingScore := rankVideo(video.Views, video.Rating)
+		canonicalKey := canonicalize(video.Title, durationSeconds)
+
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO videos(
+  provider, provider_id, title, thumbnail_url, duration, duration_seconds,
+  views, rating, source_url, embed_url, tags_json, ranking_score, canonical_key, active, last_seen_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+ON CONFLICT(provider, provider_id) DO UPDATE SET
+  title = excluded.title,
+  thumbnail_url = excluded.thumbnail_url,
+  duration = excluded.duration,
+  duration_seconds = excluded.duration_seconds,
+  views = excluded.views,
+  rating = excluded.rating,
+  source_url = excluded.source_url,
+  embed_url = excluded.embed_url,
+  tags_json = excluded.tags_json,
+  ranking_score = excluded.ranking_score,
+  canonical_key = excluded.canonical_key,
+  active = 1,
+  last_seen_at = CURRENT_TIMESTAMP`,
+			video.Provider, video.ID, video.Title, video.ThumbnailURL, video.Duration, durationSeconds,
+			nullInt(video.Views), nullFloat(video.Rating), video.SourceURL, video.EmbedURL,
+			mustJSON(tagNames(tags)), rankingScore, canonicalKey,
+		); err != nil {
+			return 0, err
+		}
+
+		if categorySlug != "" {
+			if _, err := tx.ExecContext(ctx, `
+INSERT OR IGNORE INTO video_categories(video_id, category_id, source, confidence)
+SELECT v.id, c.id, 'ingest', 1
+FROM videos v
+JOIN categories c ON c.slug = ? AND c.active = 1
+WHERE v.provider = ? AND v.provider_id = ?`,
+				categorySlug, video.Provider, video.ID,
+			); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(videos), nil
+}
+
 func (a *app) relatedVideos(ctx context.Context, provider, providerID string, limit int) ([]VideoSummary, error) {
 	var sourceID, durationSeconds int
 	var canonicalKey sql.NullString
@@ -290,8 +353,19 @@ ORDER BY c.sort_order, c.name`)
 }
 
 func (a *app) deactivateProviderIDs(ctx context.Context, provider ProviderName, ids []string) error {
-	for _, id := range ids {
-		if _, err := a.db.ExecContext(ctx, `UPDATE videos SET active = 0 WHERE provider = ? AND provider_id = ?`, provider, id); err != nil {
+	const batchSize = 400
+	for start := 0; start < len(ids); start += batchSize {
+		end := min(start+batchSize, len(ids))
+		batch := ids[start:end]
+
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+		query := `UPDATE videos SET active = 0 WHERE provider = ? AND provider_id IN (` + placeholders + `)`
+		args := make([]any, 0, len(batch)+1)
+		args = append(args, provider)
+		for _, id := range batch {
+			args = append(args, id)
+		}
+		if _, err := a.db.ExecContext(ctx, query, args...); err != nil {
 			return err
 		}
 	}
