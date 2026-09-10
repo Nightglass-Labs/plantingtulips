@@ -44,6 +44,22 @@ jobs:
         with:
           node-version: 24
 
+      - name: Wait for deployed origin
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 10 "$SITE_URL/api/v1/healthz" >/dev/null; then
+              echo "Production origin is ready."
+              exit 0
+            fi
+            echo "Origin not ready yet ($attempt/12); retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "Production origin did not become ready within 60 seconds."
+          exit 1
+
       - name: Verify deployed origin
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
